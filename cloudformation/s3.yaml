@@ -1,0 +1,9 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  AssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "irfath-zota-bucket-${AWS::AccountId}"
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled

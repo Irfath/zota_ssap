@@ -1,0 +1,76 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SSAP Asset Proxy Full Stack (S3 + Lambda + CloudFront)
+
+Resources:
+
+  AssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "irfath-zota-bucket-${AWS::AccountId}-${AWS::Region}"
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zota-ssap-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::irfath-zota-bucket-${AWS::AccountId}/*"
+
+  AssetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zota-ssap-lambda
+      PackageType: Image
+      Code:
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.0
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 512
+
+  AssetDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultCacheBehavior:
+          TargetOriginId: lambda-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: true
+        Origins:
+          - Id: lambda-origin
+            DomainName: !GetAtt AssetLambda.FunctionUrl
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+
+Outputs:
+  CloudFrontURL:
+    Description: CloudFront Distribution URL
+    Value: !GetAtt AssetDistribution.DomainName
+
+  LambdaFunctionURL:
+    Description: Lambda Function URL
+    Value: !GetAtt AssetLambda.FunctionUrl

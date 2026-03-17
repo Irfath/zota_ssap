@@ -1,0 +1,64 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "SSAP stack with S3 and Lambda container (fixed)"
+
+Resources:
+  AssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: irfath-zota-ssap-2026
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zota-ssap-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*   # ✅ FIXED
+
+        - PolicyName: LambdaLogging   # ✅ ADD THIS
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  AssetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zota-ssap-lambda
+      PackageType: Image
+      Code:
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.0
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 512
+
+Outputs:
+  LambdaFunctionArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt AssetLambda.Arn
+
+  S3BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref AssetBucket

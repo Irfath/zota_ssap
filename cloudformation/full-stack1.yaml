@@ -1,0 +1,78 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Full SSAP stack with S3, Lambda container, IAM, and CloudFront"
+
+Resources:
+  AssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:   !Sub "irfath-zota-bucket-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}" #!Sub "irfath-zota-bucket-${AWS::AccountId}" #irfath-zota-bucket #"irfath-zota-bucket-${AWS::AccountId}"
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zota-ssap-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::irfath-zota-bucket-${AWS::AccountId}/*"
+
+  AssetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zota-ssap-lambda
+      PackageType: Image
+      Code:
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.0
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 512
+
+  AssetDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultCacheBehavior:
+          TargetOriginId: s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: true
+        Origins:
+          - Id: s3-origin
+            DomainName: !GetAtt AssetBucket.DomainName
+            S3OriginConfig: {}
+
+Outputs:
+  LambdaFunctionArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt AssetLambda.Arn
+
+  S3BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref AssetBucket
+
+  CloudFrontDomain:
+    Description: "CloudFront Distribution Domain"
+    Value: !GetAtt AssetDistribution.DomainName
