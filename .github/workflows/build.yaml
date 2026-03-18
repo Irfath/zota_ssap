@@ -15,6 +15,12 @@ on:
         required: false
         default: 'no'
 
+# Add this permissions block
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
