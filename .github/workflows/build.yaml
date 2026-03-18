@@ -134,6 +134,6 @@ jobs:
 
       - name: Trigger deployment
         run: |
-          gh workflow run deploy.yml --ref main -f version="${{ steps.version.outputs.version }}"
+          gh workflow run deploy.yaml --ref main -f version="${{ steps.version.outputs.version }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
