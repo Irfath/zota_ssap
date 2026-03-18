@@ -1,6 +1,6 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Full SSAP stack with S3 and Lambda container (CloudFront removed temporarily)"
+Description: "SSAP-Secure Serverless Asset Proxy - Zota Assignment"
 
 Resources:
   AssetBucket:
@@ -30,7 +30,18 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::irfath-zota-bucket-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}/*"
+                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*   # ✅ FIXED
+
+        - PolicyName: LambdaLogging   # ✅ ADD THIS
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
 
   AssetLambda:
     Type: AWS::Lambda::Function
@@ -38,7 +49,7 @@ Resources:
       FunctionName: zota-ssap-lambda
       PackageType: Image
       Code:
-        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.0
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.9
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
       MemorySize: 512

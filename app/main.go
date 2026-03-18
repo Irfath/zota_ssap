@@ -1,53 +1,82 @@
-
 package main
 
 import (
-	"context"
-	"io"
+	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
-
-	"github.com/aws/aws-lambda-go/events"
+	
 	"github.com/aws/aws-lambda-go/lambda"
-
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-lambda-go/events"
+	
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-var s3Client *s3.Client
-var bucket string
+var s3Client *s3.S3
+var bucketName string
 
 func init() {
-	cfg, _ := config.LoadDefaultConfig(context.TODO())
-	s3Client = s3.NewFromConfig(cfg)
-
-	bucket = os.Getenv("BUCKET_NAME")
+	log.Println("=== Initializing with AWS SDK v1 ===")
+	
+	bucketName = os.Getenv("BUCKET_NAME")
+	log.Printf("BUCKET_NAME = %s", bucketName)
+	
+	// Create session with explicit region
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String("ap-southeast-1"),
+	}))
+	
+	s3Client = s3.New(sess)
+	log.Println("S3 client created")
 }
 
-func handler(ctx context.Context, request events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
-
+func handler(request events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+	log.Println("=== Handler Invoked ===")
+	
 	key := request.QueryStringParameters["key"]
+	log.Printf("Key: %s", key)
 
-	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-	})
-
-	if err != nil {
+	if key == "" {
 		return events.LambdaFunctionURLResponse{
-			StatusCode: 404,
-			Body:       "Object not found",
+			StatusCode: 400,
+			Body:       "missing key",
 		}, nil
 	}
 
-	defer obj.Body.Close()
-
-	data, _ := io.ReadAll(obj.Body)
-
+	log.Printf("Getting object: %s/%s", bucketName, key)
+	
+	resp, err := s3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return events.LambdaFunctionURLResponse{
+			StatusCode: 500,
+			Body:       fmt.Sprintf("Error: %v", err),
+		}, nil
+	}
+	defer resp.Body.Close()
+	
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Read error: %v", err)
+		return events.LambdaFunctionURLResponse{
+			StatusCode: 500,
+			Body:       fmt.Sprintf("Read error: %v", err),
+		}, nil
+	}
+	
+	log.Printf("Success! Read %d bytes", len(body))
+	
 	return events.LambdaFunctionURLResponse{
 		StatusCode: 200,
-		Body:       string(data),
+		Body:       string(body),
 		Headers: map[string]string{
-			"Content-Type": "application/octet-stream",
+			"Content-Type": "text/plain",
 		},
 	}, nil
 }

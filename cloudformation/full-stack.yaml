@@ -1,6 +1,5 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
-Description: SSAP Asset Proxy Full Stack (S3 + Lambda + CloudFront)
+Description: "SSAP-Secure Serverless Asset Proxy - Zota Assignment"
 
 Resources:
 
