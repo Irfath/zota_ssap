@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "CloudFront Zota SSAP Lambda"
+
+Parameters:
+  ExistingLambdaFunctionName:
+    Type: String
+    Default: zota-ssap-lambda
+    Description: Name of the existing Lambda function
+
+  ExistingLambdaUrl:
+    Type: String
+    Default: https://mpefgbx3iq7xt4anf5fyrvt77i0otzfn.lambda-url.ap-southeast-1.on.aws/
+    Description: Lambda Function URL (from your existing stack)
+
+Resources:
+  # CloudFront Distribution
+  AssetCloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: "CDN for Zota SSAP - Free Tier"
+        PriceClass: PriceClass_100  # Free tier eligible (NA + Europe)
+        DefaultRootObject: ""
+        Origins:
+          - Id: LambdaOrigin
+            # Extract domain from Lambda URL
+            DomainName: !Select [2, !Split ["/", !Ref ExistingLambdaUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: LambdaOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized policy
+          MinTTL: 0
+          DefaultTTL: 3600  # 1 hour cache
+          MaxTTL: 86400     # 24 hours max cache
+          ForwardedValues:
+            QueryString: true
+            QueryStringCacheKeys:
+              - key
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  CloudFrontUrl:
+    Description: "CloudFront Distribution URL (CDN)"
+    Value: !Sub "https://${AssetCloudFront.DomainName}"
+
+  CloudFrontTestCommand:
+    Description: "Command to test via CloudFront"
+    Value: !Sub "curl 'https://${AssetCloudFront.DomainName}/?key=test.txt'"
+
+  OriginLambdaUrl:
+    Description: "Original Lambda URL (for reference)"
+    Value: !Ref ExistingLambdaUrl

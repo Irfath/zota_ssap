@@ -29,9 +29,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*   
+                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*
 
-        - PolicyName: LambdaLogging  
+        - PolicyName: LambdaLogging
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -48,10 +48,37 @@ Resources:
       FunctionName: zota-ssap-lambda
       PackageType: Image
       Code:
-        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:1.9
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:v1-final
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 15
       MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AssetBucket
+
+  # Lambda URL
+  AssetLambdaUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref AssetLambda
+      AuthType: NONE
+
+  # Permission for URL
+  LambdaPublicInvokeUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AssetLambda
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+
+  LambdaPublicInvokeFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AssetLambda
+      Action: lambda:InvokeFunction
+      Principal: "*"
 
 Outputs:
   LambdaFunctionArn:
@@ -61,3 +88,11 @@ Outputs:
   S3BucketName:
     Description: "S3 Bucket Name"
     Value: !Ref AssetBucket
+
+  LambdaFunctionUrl:
+    Description: "Lambda Function URL"
+    Value: !GetAtt AssetLambdaUrl.FunctionUrl
+
+  TestCommand:
+    Description: "Command to test the Lambda URL"
+    Value: !Sub "curl '${AssetLambdaUrl.FunctionUrl}?key=test.txt'"

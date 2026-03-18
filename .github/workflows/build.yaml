@@ -3,14 +3,30 @@ name: Build and Push to ECR
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 3.0, 4.1) - Leave empty for auto'
+        required: false
+        default: ''
+      bump_major:
+        description: 'Bump major version? (yes/no)'
+        required: false
+        default: 'no'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      full_version: ${{ steps.version.outputs.full_version }}
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -22,6 +38,68 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Determine version
+        id: version
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          
+          # PRIORITY 1: Manual input from workflow_dispatch
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using manual version: $VERSION"
+          
+          # PRIORITY 2: Git tag (v1.0, v2.0, v3.0, etc.)
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "Using Git tag version: $VERSION"
+          
+          # PRIORITY 3: Auto-increment from ECR
+          else
+            echo "Auto-incrementing version from ECR..."
+            
+            # Get the latest version from ECR
+            LATEST_VERSION=$(aws ecr describe-images \
+              --repository-name zota-ssap-repo \
+              --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+              --output text 2>/dev/null || echo "1.0")
+            
+            # Extract just the version number (e.g., from "2.2" or "2.2-a1b2c3d")
+            LATEST_VERSION=$(echo $LATEST_VERSION | grep -oE '^[0-9]+\.[0-9]+' || echo "1.0")
+            
+            MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
+            MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
+            
+            echo "Latest version in ECR: $LATEST_VERSION (Major: $MAJOR, Minor: $MINOR)"
+            
+            # Check if we should bump major version
+            if [ "${{ github.event.inputs.bump_major }}" == "yes" ]; then
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              echo "Bumping major version to $MAJOR"
+            else
+              MINOR=$((MINOR + 1))
+              echo "Bumping minor version to $MINOR"
+            fi
+            
+            VERSION="${MAJOR}.${MINOR}"
+            echo "Auto-incremented version: $VERSION"
+          fi
+          
+          # Create full version with commit SHA
+          FULL_VERSION="${VERSION}-${SHORT_SHA}"
+          
+          # Save outputs
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          
+          echo "================================="
+          echo "Version: $VERSION"
+          echo "Full version: $FULL_VERSION"
+          echo "================================="
 
       - name: Build Go binary
         run: |
@@ -36,8 +114,40 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: zota-ssap-repo
-          IMAGE_TAG: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          FULL_VERSION: ${{ steps.version.outputs.full_version }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+          GIT_SHA: ${{ github.sha }}
         run: |
           cd docker
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
+          echo "Building Docker image with tags:"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION"
+          
+          # Build with primary tag (full SHA)
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA .
+          
+          # Add additional tags
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION
+          
+          # Push all tags
+          echo "Pushing to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION
+          
+          echo "Image pushed successfully with tags: $VERSION, $FULL_VERSION"
+
+      - name: Trigger deployment
+        run: |
+          gh workflow run deploy.yml --ref main \
+            -f version="${{ steps.version.outputs.version }}" \
+            -f full_version="${{ steps.version.outputs.full_version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

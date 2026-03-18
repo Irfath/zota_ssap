@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "SSAP-Secure Serverless Asset Proxy - Zota Assignment with CloudFront"
+
+Resources:
+  AssetBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: irfath-zota-ssap-2026
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: zota-ssap-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*
+
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  AssetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: zota-ssap-lambda
+      PackageType: Image
+      Code:
+        ImageUri: 820064186646.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:v1-final
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 15
+      MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AssetBucket
+
+  # Lambda URL
+  AssetLambdaUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref AssetLambda
+      AuthType: NONE
+
+  # Permission for URL
+  LambdaPublicInvokeUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AssetLambda
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  # Permission for function
+  LambdaPublicInvokeFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AssetLambda
+      Action: lambda:InvokeFunction
+      Principal: "*"
+
+  # ============================================
+  # NEW: CloudFront Distribution
+  # ============================================
+  AssetCloudFront:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: AssetLambdaUrl
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: "CDN for Zota SSAP - Free Tier"
+        PriceClass: PriceClass_100
+        DefaultRootObject: ""
+        Origins:
+          - Id: LambdaOrigin
+            # Extract domain from Lambda URL (removes https:// and trailing /)
+            DomainName: !Select [2, !Split ["/", !GetAtt AssetLambdaUrl.FunctionUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: LambdaOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized policy
+          MinTTL: 0
+          DefaultTTL: 3600  # 1 hour cache
+          MaxTTL: 86400     # 24 hours max cache
+          ForwardedValues:
+            QueryString: true
+            QueryStringCacheKeys:
+              - key
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  LambdaFunctionArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt AssetLambda.Arn
+
+  S3BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref AssetBucket
+
+  LambdaFunctionUrl:
+    Description: "Lambda Function URL (direct)"
+    Value: !GetAtt AssetLambdaUrl.FunctionUrl
+
+  TestCommand:
+    Description: "Command to test the Lambda URL directly"
+    Value: !Sub "curl '${AssetLambdaUrl.FunctionUrl}?key=test.txt'"
+
+  # ============================================
+  # NEW: CloudFront Outputs
+  # ============================================
+  CloudFrontUrl:
+    Description: "CloudFront Distribution URL (CDN)"
+    Value: !Sub "https://${AssetCloudFront.DomainName}"
+
+  CloudFrontTestCommand:
+    Description: "Command to test via CloudFront"
+    Value: !Sub "curl 'https://${AssetCloudFront.DomainName}/?key=test.txt'"

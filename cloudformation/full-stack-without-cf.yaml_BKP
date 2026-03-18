@@ -30,9 +30,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*   # ✅ FIXED
+                Resource: arn:aws:s3:::irfath-zota-ssap-2026/*  
 
-        - PolicyName: LambdaLogging   # ✅ ADD THIS
+        - PolicyName: LambdaLogging    
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
