@@ -85,8 +85,8 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           
           echo "================================="
-          echo "✅ Version: $VERSION"
-          echo "✅ Full version: ${VERSION}-${SHORT_SHA}"
+          echo "Version: $VERSION"
+          echo "Full version: ${VERSION}-${SHORT_SHA}"
           echo "================================="
 
       - name: Build Go binary
@@ -109,7 +109,7 @@ jobs:
         run: |
           cd docker
           
-          echo "🏗️ Building Docker image with tags:"
+          echo "Building Docker image with tags:"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION"
@@ -124,13 +124,13 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION
           
           # Push all tags
-          echo "📤 Pushing to ECR..."
+          echo "Pushing to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION
           
-          echo "✅ Image pushed successfully!"
+          echo "Image pushed successfully!"
 
       - name: Trigger deployment
         run: |

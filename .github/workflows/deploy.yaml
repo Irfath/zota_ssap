@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to deploy (e.g., 2.2, 3.0)'
+        description: 'Version to deploy (e.g., 1.1, 2.0)'
         required: true
 
 jobs:
@@ -21,24 +21,20 @@ jobs:
       - name: Deploy version
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          echo "🔄 Deploying version: $VERSION"
+          echo "Deploying version: $VERSION"
           
           aws lambda update-function-code \
             --function-name zota-ssap-lambda \
             --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-southeast-1.amazonaws.com/zota-ssap-repo:$VERSION
           
-          echo "✅ Deployment initiated for version $VERSION"
+          echo "Deployment initiated for version $VERSION"
 
       - name: Wait for update
         run: |
-          echo "⏳ Waiting for update to complete..."
-          while [[ $(aws lambda get-function --function-name zota-ssap-lambda --query 'Configuration.LastUpdateStatus' --output text) == "InProgress" ]]; do
-            echo "Still updating... (waiting 5s)"
-            sleep 5
-          done
-          echo "✅ Update completed!"
+          echo "Waiting for update to complete..."
+          sleep 10
 
-      - name: Test deployment
+      - name: Test Lambda
         run: |
-          echo "🧪 Testing Lambda..."
+          echo "Testing Lambda..."
           curl "https://mpefgbx3iq7xt4anf5fyrvt77i0otzfn.lambda-url.ap-southeast-1.on.aws/?key=test.txt"
