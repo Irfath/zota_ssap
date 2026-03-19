@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g., 2.2, 3.0) - Leave empty for auto'
+        description: 'Version- Leave empty for auto'
         required: false
         default: ''
       bump_major:
@@ -121,7 +121,7 @@ jobs:
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION"
           
-          # Build with primary tag
+         
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA .
           
           # Add additional tags
