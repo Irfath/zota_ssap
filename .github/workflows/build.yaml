@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version- Leave empty for auto'
+        description: 'Version - Leave empty for auto'
         required: false
         default: ''
       bump_major:
@@ -15,7 +15,6 @@ on:
         required: false
         default: 'no'
 
-# Add this permissions block
 permissions:
   contents: read
   actions: write
@@ -62,7 +61,6 @@ jobs:
           else
             echo "Auto-incrementing version from ECR..."
             
-            # Get the latest version tag from ECR
             LATEST_VERSION=$(aws ecr describe-images \
               --repository-name zota-ssap-repo \
               --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
@@ -73,7 +71,6 @@ jobs:
             
             echo "Latest version in ECR: $LATEST_VERSION"
             
-            # Check for major bump
             if [ "${{ github.event.inputs.bump_major }}" == "yes" ]; then
               MAJOR=$((MAJOR + 1))
               MINOR=0
@@ -98,7 +95,10 @@ jobs:
       - name: Build Go binary
         run: |
           cd app
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-w -s" \
+            -tags netgo \
+            -o main main.go
           cd ..
 
       - name: Copy binary to docker folder
@@ -121,15 +121,12 @@ jobs:
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION"
           
-         
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA .
           
-          # Add additional tags
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA $ECR_REGISTRY/$ECR_REPOSITORY:$FULL_VERSION
           
-          # Push all tags
           echo "Pushing to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_SHA
