@@ -1,18 +1,5 @@
-#FROM public.ecr.aws/lambda/go:1
-#COPY main ${LAMBDA_TASK_ROOT}
-#CMD ["main"]
-
-#FROM public.ecr.aws/lambda/provided:al2
-#COPY main /var/task/main
-#CMD ["main"] 
-
-
-#FROM public.ecr.aws/lambda/go:1
-#COPY main ${LAMBDA_TASK_ROOT}
-#CMD ["main"]
-
 # Stage 1: Builder - for compiling Go binary
-FROM public.ecr.aws/lambda/go:1.21 AS builder
+FROM public.ecr.aws/lambda/go:1 AS builder
 
 # Set working directory
 WORKDIR /build
@@ -31,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o main main.go
 
 # Stage 2: Final Lambda image
-FROM public.ecr.aws/lambda/go:1.21
+FROM public.ecr.aws/lambda/go:1
 
 # Set timezone for consistent logs
 ENV TZ=UTC
